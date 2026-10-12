@@ -1,0 +1,958 @@
+{
+  "info": {
+    "_postman_id": "f7c28e8a-a5d9-4a2d-bbcb-8d1f77e59a01",
+    "name": "Food Delivery Microservices - API Testing",
+    "description": "Static request collection generated from controller mappings in the supplied source ZIP. Not a claim that live endpoints were integration-tested. See README-API-TESTING.md.\n\nSecurity: JWT is validated by Gateway and downstream services. Public GETs are restaurant/menu reads only. Internal inventory mutation requires INTERNAL_SERVICE_KEY. Payment is demo-only and checks order ownership and exact total.\nRun all API requests through the Gateway. Service instances use dynamic ports, so direct localhost service URLs are not reliable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "userServiceBaseUrl",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "customerUsername",
+      "value": "postman-customer@example.com"
+    },
+    {
+      "key": "customerPassword",
+      "value": "Customer-Pass-123!"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "ownerToken",
+      "value": ""
+    },
+    {
+      "key": "agentToken",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "restaurantId",
+      "value": ""
+    },
+    {
+      "key": "foodItemId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Register customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/user",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "user"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Postman Customer\",\n  \"email\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\",\n  \"phoneNumber\": 9876543210\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Creates a CUSTOMER account. Public registration ignores submitted privileged roles."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Registration returns 201', function () { pm.response.to.have.status(201); });",
+              "let body = pm.response.json();",
+              "if (body && body.id) pm.collectionVariables.set('userId', body.id);",
+              "if (body && body.email) pm.collectionVariables.set('customerUsername', body.email);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Login customer (save token)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/token",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "token"
+          ]
+        },
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Login response is expected to be a raw JWT string. Saves it as token."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login returns 200', function () { pm.response.to.have.status(200); });",
+              "let t = pm.response.text().trim();",
+              "try { t = JSON.parse(t); } catch (e) {}",
+              "if (typeof t === 'string' && t.length > 20) pm.collectionVariables.set('token', t);",
+              "pm.test('JWT token was captured', function () { pm.expect(pm.collectionVariables.get('token')).to.be.a('string').and.not.empty; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Validate JWT",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/validate?token={{token}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "validate"
+          ],
+          "query": [
+            {
+              "key": "token",
+              "value": "{{token}}"
+            }
+          ]
+        },
+        "auth": {
+          "type": "noauth"
+        },
+        "description": "Public token validation endpoint."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Token validation returns 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 List restaurants",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/restaurant",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "restaurant"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Gateway currently applies JWT authentication to restaurant routes. Use a valid token."
+      }
+    },
+    {
+      "name": "05 Search restaurants",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/restaurant/search?page=0&size=10&sortBy=name&direction=asc&name=&minRating=",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "restaurant",
+            "search"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "0"
+            },
+            {
+              "key": "size",
+              "value": "10"
+            },
+            {
+              "key": "sortBy",
+              "value": "name"
+            },
+            {
+              "key": "direction",
+              "value": "asc"
+            },
+            {
+              "key": "name",
+              "value": ""
+            },
+            {
+              "key": "minRating",
+              "value": ""
+            }
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Search and pagination."
+      }
+    },
+    {
+      "name": "06 Get restaurant by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/restaurant/{{restaurantId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "restaurant",
+            "{{restaurantId}}"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Set restaurantId from the create response or database."
+      }
+    },
+    {
+      "name": "07 Create restaurant (owner/admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/restaurant",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "restaurant"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Postman Demo Kitchen\",\n  \"description\": \"Restaurant created for API testing\",\n  \"address\": {\n    \"address\": \"24 Market Road\",\n    \"city\": \"Pune\",\n    \"state\": \"Maharashtra\",\n    \"zipcode\": 411001\n  },\n  \"contactInfo\": [\n    9876543210\n  ],\n  \"rating\": 4.2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Requires RESTAURANT_OWNER or ADMIN. Response contains generated restaurant ID."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Create restaurant returns 201', function () { pm.response.to.have.status(201); });",
+              "let m = pm.response.text().match(/id:\\s*([A-Za-z0-9_-]+)/i); if (m) pm.collectionVariables.set('restaurantId', m[1]);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 List food items by restaurant",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fooditem/{{restaurantId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fooditem",
+            "{{restaurantId}}"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Set restaurantId before running."
+      }
+    },
+    {
+      "name": "09 Add food item (owner/admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fooditem",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fooditem"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Paneer Wrap\",\n  \"description\": \"Food item for Postman testing\",\n  \"price\": 180.0,\n  \"quantity\": 20,\n  \"restaurantId\": \"{{restaurantId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Requires restaurant owner/admin; restaurant must belong to the logged-in owner. Response contains food item ID."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Create food item returns 201', function () { pm.response.to.have.status(201); });",
+              "let m = pm.response.text().match(/id:\\s*([A-Za-z0-9_-]+)/i); if (m) pm.collectionVariables.set('foodItemId', m[1]);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Update food item (owner/admin)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fooditem",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fooditem"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{foodItemId}}\",\n  \"name\": \"Paneer Wrap Updated\",\n  \"description\": \"Updated by Postman\",\n  \"price\": 190.0,\n  \"quantity\": 18,\n  \"restaurantId\": \"{{restaurantId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Requires owner/admin and existing foodItemId."
+      }
+    },
+    {
+      "name": "11 Place order (customer)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/order",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "order"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurantId\": \"{{restaurantId}}\",\n  \"orderItems\": [\n    {\n      \"name\": \"Paneer Wrap\",\n      \"price\": 180,\n      \"quantity\": 2,\n      \"foodItemId\": \"{{foodItemId}}\"\n    }\n  ],\n  \"totalAmount\": 0,\n  \"address\": {\n    \"address\": \"12 Sample Road\",\n    \"city\": \"Pune\",\n    \"state\": \"Maharashtra\",\n    \"zipcode\": 411001\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Requires CUSTOMER. Server ignores client price/total and recalculates from menu. Saves orderId and orderTotal from the response."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Create order returns 201', function () { pm.response.to.have.status(201); });",
+              "try { const d = pm.response.json(); if (d.id) pm.collectionVariables.set('orderId', d.id); if (d.totalAmount !== undefined) pm.environment.set('orderTotal', String(d.totalAmount)); } catch(e) {}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Update order status (restaurant owner/admin)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/order/status?orderId={{orderId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "order",
+            "status"
+          ],
+          "query": [
+            {
+              "key": "orderId",
+              "value": "{{orderId}}"
+            }
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "\"PREPARING\"",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Use ownerToken for an order belonging to that owner\u2019s restaurant, or adminToken. Body is an enum string, e.g. PREPARING. The order must be CONFIRMED."
+      }
+    },
+    {
+      "name": "13 Submit demo payment (customer only)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/payment",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payment"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": {{orderTotal}},\n  \"orderId\": \"{{orderId}}\",\n  \"creditCardInfo\": {\n    \"cardNumber\": \"4111111111111111\",\n    \"cardHolderName\": \"Postman Customer\",\n    \"expiryMonth\": \"12\",\n    \"expiryYear\": \"2030\",\n    \"securityCode\": \"123\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Run after placing an order. Uses the saved orderTotal; payment is simulated and does not charge a real card. Requires the same customer who placed the order."
+      }
+    },
+    {
+      "name": "14 Create delivery (agent/admin)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/delivery/{{orderId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "delivery",
+            "{{orderId}}"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{agentToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Requires DELIVERY_AGENT or ADMIN. Run after an order exists."
+      }
+    },
+    {
+      "name": "15 Get own user profile by ID (User Service)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/user/{{userId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "user",
+            "{{userId}}"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Gateway routes /api/v1/user/** to Auth Service. Use a valid JWT."
+      }
+    },
+    {
+      "name": "16 Update own User Service profile",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/user",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "user"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{userId}}\",\n  \"fullName\": \"Postman Customer Updated\",\n  \"username\": \"{{customerUsername}}\",\n  \"phoneNumber\": 9876543210,\n  \"address\": {\n    \"address\": \"12 Sample Road\",\n    \"city\": \"Pune\",\n    \"state\": \"Maharashtra\",\n    \"zipcode\": 411001\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "User ID and username must match the logged-in user. Keep username unchanged unless you know the effect."
+      }
+    },
+    {
+      "name": "17 Assign restaurant-owner role (admin; syncs through keyed user topic)",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/user/{{userId}}/role?role=RESTAURANT_OWNER",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "user",
+            "{{userId}}",
+            "role"
+          ],
+          "query": [
+            {
+              "key": "role",
+              "value": "RESTAURANT_OWNER"
+            }
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Requires adminToken. User Service publishes the full updated user record to user-registered-topic; wait for Auth Service to consume the event and log in again."
+      }
+    },
+    {
+      "name": "18 Admin list delivery-agent users (User Service)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/user/role/DELIVERY_AGENT",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "user",
+            "role",
+            "DELIVERY_AGENT"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Use a valid JWT; endpoint is routed to Auth Service."
+      }
+    },
+    {
+      "name": "19 Admin list customers (User Service)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/user/role/CUSTOMER",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "user",
+            "role",
+            "CUSTOMER"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Auth Service endpoint; username query parameter."
+      }
+    },
+    {
+      "name": "20 Internal inventory endpoint (expected 403 via Gateway)",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fooditem/quantity?foodItemIds={{foodItemId}}&orderQuantities=1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fooditem",
+            "quantity"
+          ],
+          "query": [
+            {
+              "key": "foodItemIds",
+              "value": "{{foodItemId}}"
+            },
+            {
+              "key": "orderQuantities",
+              "value": "1"
+            }
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ownerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Security negative test: direct calls without INTERNAL_SERVICE_KEY must be rejected. Normal clients must never call this endpoint; Order Service uses it internally."
+      }
+    },
+    {
+      "name": "23 Assign delivery agent (admin only)",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/order/{{orderId}}/delivery-agent?username={{deliveryAgentUsername}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "order",
+            "{{orderId}}",
+            "delivery-agent"
+          ],
+          "query": [
+            {
+              "key": "username",
+              "value": "{{deliveryAgentUsername}}"
+            }
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Requires ADMIN. The order must be PREPARING or OUT_FOR_DELIVERY. The target username must belong to a DELIVERY_AGENT account."
+      }
+    },
+    {
+      "name": "24 Get own order (customer/admin)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/order/{{orderId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "order",
+            "{{orderId}}"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Customer can retrieve only their own order; adminToken can retrieve any order. Other users should receive 403."
+      }
+    }
+  ]
+}

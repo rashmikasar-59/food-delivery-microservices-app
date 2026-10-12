@@ -1,0 +1,23 @@
+# Multi-stage Docker build for Food Delivery Microservices
+FROM maven:3.9-eclipse-temurin-17 AS build
+
+WORKDIR /workspace
+
+# Copy the complete multi-module Maven project
+COPY . .
+
+# Build all modules and their dependencies
+RUN mvn -B -DskipTests package
+
+# Java 17 runtime image
+FROM eclipse-temurin:17-jre
+
+WORKDIR /app
+
+# Copy the packaged JAR files from the build stage
+COPY --from=build /workspace/ /workspace/
+
+# Start a selected microservice using SERVICE_JAR
+ENV SERVICE_JAR=""
+
+ENTRYPOINT ["sh", "-c", "java -XX:MaxRAMPercentage=75.0 -jar /workspace/${SERVICE_JAR}"]
