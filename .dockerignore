@@ -1,0 +1,15 @@
+.git
+.idea
+.run
+**/target
+logs
+jwt.txt
+.env
+
+# Environment files and secrets
+.env.*
+!.env.example
+
+# Accidental local files
+/tdout.splitlines()
+/ubprocess

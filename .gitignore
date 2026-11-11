@@ -1,0 +1,30 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+jwt.txt
+*.pem
+*.key
+
+# Logs and runtime files
+logs/
+*.log
+.run/
+*.pid
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Maven build output
+target/
+**/target/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Accidental local files
+/tdout.splitlines()
+/ubprocess

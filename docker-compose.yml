@@ -1,0 +1,188 @@
+services:
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: apache/kafka:4.4.0
+    restart: unless-stopped
+
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  eureka-server:
+    image: food-eureka:test
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+
+  auth-service:
+    image: food-auth-service:test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/food_auth_db
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      eureka-server:
+        condition: service_started
+
+  user-service:
+    image: food-user-service:test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/food_user_db
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      eureka-server:
+        condition: service_started
+
+  restaurant-service:
+    image: food-restaurant-service:test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/food_restaurant_db
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      eureka-server:
+        condition: service_started
+
+  menu-service:
+    image: food-menu-service:test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/food_menu_db
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      RESTAURANT_SERVICE_BASE_URL: http://restaurant-service:8083
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      eureka-server:
+        condition: service_started
+      restaurant-service:
+        condition: service_started
+
+  order-service:
+    image: food-order-service:test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/food_orders_db
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      RESTAURANT_SERVICE_BASE_URL: http://restaurant-service:8083
+      MENU_SERVICE_BASE_URL: http://menu-service:8084
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      eureka-server:
+        condition: service_started
+      restaurant-service:
+        condition: service_started
+      menu-service:
+        condition: service_started
+
+  payment-service:
+    image: food-payment-service:test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/food_payments_db
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+
+  delivery-service:
+    image: food-delivery-service:test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/food_deliveries_db
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+
+  api-gateway:
+    image: food-gateway:test
+    restart: unless-stopped
+    ports:
+      - "8088:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      - eureka-server
+      - auth-service
+      - user-service
+      - restaurant-service
+      - menu-service
+      - order-service
+      - payment-service
+      - delivery-service
+
+
+
+  notification-service:
+    image: food-notification-service:test
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_started
+
+volumes:
+  mongodb_data:
+  kafka_data:
